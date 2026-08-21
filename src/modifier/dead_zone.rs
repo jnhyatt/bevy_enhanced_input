@@ -112,8 +112,6 @@ pub enum DeadZoneKind {
 
 #[cfg(test)]
 mod tests {
-    use bevy::prelude::*;
-
     use super::*;
     use crate::context;
 

@@ -65,8 +65,6 @@ impl InputModifier for DeltaScale {
 mod tests {
     use core::time::Duration;
 
-    use bevy::prelude::*;
-
     use super::*;
     use crate::context;
 

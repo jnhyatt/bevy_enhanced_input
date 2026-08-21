@@ -117,8 +117,6 @@ impl InputModifier for Negate {
 
 #[cfg(test)]
 mod tests {
-    use bevy::prelude::*;
-
     use super::*;
     use crate::context;
 
