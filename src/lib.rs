@@ -174,7 +174,7 @@ with performance playing a relatively minor role unless you have a very large nu
 
 When an action is triggered, we can notify your game logic using Bevy's [`Event`] system.
 These triggers are driven by changes (including transitions from a state to itself) in the action's [`TriggerState`],
-updated during [`EnhancedInputSystems::Apply`].
+updated during [`EnhancedInputSystems::Update`] and triggered during [`EnhancedInputSystems::Trigger`].
 
 There are a number of different [action events](crate::action::events), but the most commonly used are:
 - [`Start<A>`]: The action has started triggering (e.g. button pressed).
@@ -489,13 +489,19 @@ pub enum EnhancedInputSystems {
     ///
     /// Runs in [`PreUpdate`].
     Prepare,
-    /// Updates the state of the input contexts from inputs and mocks.
+    /// Evaluates registered input contexts from the current inputs and mocks.
+    ///
+    /// Updates [`ActionValue`], [`TriggerState`], [`ActionEvents`], and [`ActionTime`]
+    /// on each action entity.
     ///
     /// Executes in every schedule where a context is registered.
     Update,
-    /// Applies the value from [`ActionValue`] to [`Action`] and triggers
-    /// events evaluated from [`Self::Update`].
+    /// Applies the [`ActionValue`] produced by [`Self::Update`] to the typed [`Action`].
     ///
     /// Executes in every schedule where a context is registered.
     Apply,
+    /// Triggers action events evaluated by [`Self::Update`].
+    ///
+    /// Executes in every schedule where a context is registered.
+    Trigger,
 }

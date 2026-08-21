@@ -280,14 +280,10 @@ impl ScheduleContexts {
             .build_state(app.world_mut())
             .build_system(update::<S>);
 
-        let trigger_fn = (
-            ParamBuilder,
+        let apply_fn = (
             ParamBuilder,
             QueryParamBuilder::new(|builder| {
                 builder.optional(|builder| {
-                    for &id in &self.activity_ids {
-                        builder.mut_id(id);
-                    }
                     for &id in &self.actions_ids {
                         builder.ref_id(id);
                     }
@@ -298,16 +294,37 @@ impl ScheduleContexts {
             .build_state(app.world_mut())
             .build_system(apply::<S>);
 
+        let trigger_fn = (
+            ParamBuilder,
+            ParamBuilder,
+            QueryParamBuilder::new(|builder| {
+                builder.optional(|builder| {
+                    for &id in &self.actions_ids {
+                        builder.ref_id(id);
+                    }
+                });
+            }),
+            ParamBuilder,
+        )
+            .build_state(app.world_mut())
+            .build_system(trigger::<S>);
+
         app.init_resource::<ContextInstances<S>>()
             .configure_sets(
                 S::default(),
-                (EnhancedInputSystems::Update, EnhancedInputSystems::Apply).chain(),
+                (
+                    EnhancedInputSystems::Update,
+                    EnhancedInputSystems::Apply,
+                    EnhancedInputSystems::Trigger,
+                )
+                    .chain(),
             )
             .add_systems(
                 S::default(),
                 (
                     update_fn.in_set(EnhancedInputSystems::Update),
-                    trigger_fn.in_set(EnhancedInputSystems::Apply),
+                    apply_fn.in_set(EnhancedInputSystems::Apply),
+                    trigger_fn.in_set(EnhancedInputSystems::Trigger),
                 ),
             );
     }
@@ -662,10 +679,43 @@ pub type ActionsQuery<'w, 's> = Query<
 >;
 
 fn apply<S: ScheduleLabel>(
-    mut commands: Commands,
     instances: Res<ContextInstances<S>>,
     contexts: Query<FilteredEntityRef, Without<ActionFns>>,
     mut actions: Query<EntityMut, (With<ActionFns>, Without<ContextInstances<S>>)>,
+) {
+    for instance in &**instances {
+        let Ok(context) = contexts.get(instance.entity()) else {
+            trace!(
+                "skipping applying values for `{}` on disabled `{}`",
+                instance.name(),
+                instance.entity(),
+            );
+            continue;
+        };
+        let Some(context_actions) = instance.actions(&context) else {
+            continue;
+        };
+
+        trace!(
+            "applying values for `{}` on `{}`",
+            instance.name(),
+            instance.entity(),
+        );
+
+        let mut actions_iter = actions.iter_many_mut(context_actions);
+        while let Some(mut action) = actions_iter.fetch_next() {
+            let fns = *action.get::<ActionFns>().unwrap();
+            let value = *action.get::<ActionValue>().unwrap();
+            fns.store_value(&mut action, value);
+        }
+    }
+}
+
+fn trigger<S: ScheduleLabel>(
+    mut commands: Commands,
+    instances: Res<ContextInstances<S>>,
+    contexts: Query<FilteredEntityRef, Without<ActionFns>>,
+    actions: Query<EntityRef, (With<ActionFns>, Without<ContextInstances<S>>)>,
 ) {
     for instance in &**instances {
         let Ok(context) = contexts.get(instance.entity()) else {
@@ -686,12 +736,9 @@ fn apply<S: ScheduleLabel>(
             instance.entity(),
         );
 
-        let mut actions_iter = actions.iter_many_mut(context_actions);
-        while let Some(mut action) = actions_iter.fetch_next() {
+        for action in actions.iter_many(context_actions) {
             let fns = *action.get::<ActionFns>().unwrap();
             let value = *action.get::<ActionValue>().unwrap();
-            fns.store_value(&mut action, value);
-
             let state = *action.get::<TriggerState>().unwrap();
             let events = *action.get::<ActionEvents>().unwrap();
             let time = *action.get::<ActionTime>().unwrap();

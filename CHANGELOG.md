@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Split `EnhancedInputSystems::Apply` into two sets: `Apply` (where `Action` gets updated) and `Trigger` (where observers get triggered)
+
 ## [0.26.0] - 2026-06-20
 
 ### Changed
