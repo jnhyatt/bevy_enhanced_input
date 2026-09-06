@@ -3,35 +3,37 @@
 [![crates.io](https://img.shields.io/crates/v/bevy_enhanced_input)](https://crates.io/crates/bevy_enhanced_input)
 [![docs.rs](https://docs.rs/bevy_enhanced_input/badge.svg)](https://docs.rs/bevy_enhanced_input)
 [![license](https://img.shields.io/crates/l/bevy_enhanced_input)](#license)
-[![codecov](https://codecov.io/gh/projectharmonia/bevy_enhanced_input/graph/badge.svg?token=wirFEuKmMz)](https://codecov.io/gh/projectharmonia/bevy_enhanced_input)
+[![codecov](https://codecov.io/gh/simgine/bevy_enhanced_input/graph/badge.svg?token=wirFEuKmMz)](https://codecov.io/gh/simgine/bevy_enhanced_input)
 
-Dynamic and contextual input mappings for Bevy, inspired by [Unreal Engine Enhanced Input](https://dev.epicgames.com/documentation/en-us/unreal-engine/enhanced-input-in-unreal-engine).
+A powerful observer-based input manager for [Bevy](https://bevyengine.org), allowing you to bind keys and other inputs to in-game actions.
 
-## Features
-
-* Map inputs from various sources (keyboard, gamepad, etc.) to gameplay actions like `Jump`, `Move`, or `Attack`.
-* Assign actions to different contexts like `OnFoot` or `InCar`, which are regular components.
-* Activate or deactivate contexts by simply adding or removing components.
-* Control how actions accumulate input from sources and consume it.
-* Layer multiple contexts on a single entity, controlled by priority.
-* Apply modifiers to inputs, such as dead zones, inversion, scaling, etc., or create custom modifiers by implementing a trait.
-* Assign conditions for how and when an action is triggered, like "hold", "tap", "chord", etc. You can also create custom conditions by implementing a trait.
-* React on actions with observers.
+The design of this crate was inspired by [Unreal Engine Enhanced Input](https://dev.epicgames.com/documentation/en-us/unreal-engine/enhanced-input-in-unreal-engine) plugin.
 
 ## Getting Started
 
-Check out the [quick start guide](https://docs.rs/bevy_enhanced_input) for more details.
+Check out the [crate docs](https://docs.rs/bevy_enhanced_input) for an overview of the core concepts
+and all of the information needed to quickly integrate this into your game.
 
-See also examples in the repo. [simple.rs](examples/simple.rs) should be a good starting point.
+The examples in the repo are also a useful to learn from.
+[basic_action_management.rs](examples/basic_action_management.rs) should be a good starting point.
+
+## Getting help
 
 Have any questions? Feel free to ask in the dedicated [`bevy_enhanced_input` channel](https://discord.com/channels/691052431525675048/1297361733886677036) in Bevy's Discord server.
 
+Interested in contributing? Say hi there, or just pick up an issue and get started!
+This crate loosely follows the development practices laid out in [Bevy's Contributing Guide](https://bevy.org/learn/contribute/introduction/).
+
 ## Bevy compatibility
 
-| bevy        | bevy_enhanced_input |
-| ----------- | ------------------- |
-| 0.15.0      | 0.4-0.7             |
-| 0.14.0      | 0.1-0.3             |
+| bevy   | bevy_enhanced_input |
+| ------ | ------------------- |
+| 0.19.0 | 0.26                |
+| 0.18.0 | 0.21-0.25           |
+| 0.17.0 | 0.19-0.20           |
+| 0.16.0 | 0.11-0.18           |
+| 0.15.0 | 0.4-0.10            |
+| 0.14.0 | 0.1-0.3             |
 
 ## License
 

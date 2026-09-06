@@ -1,53 +1,69 @@
 [package]
 name = "bevy_enhanced_input"
-version = "0.7.2"
-authors = ["Hennadii Chernyshchyk <genaloner@gmail.com>"]
-edition = "2021"
-description = "Dynamic and contextual input mappings for Bevy"
+version = "0.26.0"
+authors = [
+  "Hennadii Chernyshchyk <genaloner@gmail.com>",
+  "Alice Cecile <alice.i.cecile@gmail.com>",
+]
+edition = "2024"
+description = "Input manager for Bevy, inspired by Unreal Engine Enhanced Input"
 readme = "README.md"
-repository = "https://github.com/projectharmonia/bevy_enhanced_input"
+repository = "https://github.com/simgine/bevy_enhanced_input"
 keywords = ["bevy", "input"]
 categories = ["game-development"]
 license = "MIT OR Apache-2.0"
-include = ["/src", "/tests", "/examples", "/LICENSE*"]
-
-[dependencies]
-bevy_enhanced_input_macros = { path = "macros", version = "0.7.0" }
-bevy = { version = "0.15", default-features = false, features = ["serialize"] }
-bevy_egui = { version = "0.32", default-features = false, optional = true }
-serde = "1.0"
-bitflags = { version = "2.6", features = ["serde"] }
-
-[dev-dependencies]
-bevy = { version = "0.15", default-features = false, features = [
-  "bevy_gilrs",
-  "bevy_gizmos",
-  "bevy_window",
-  "default_font",
-  "x11",
-] }
-ron = "0.8"
-
-[features]
-default = ["ui_priority"]
-
-# Prioritizes 'bevy_ui' actions when processing inputs.
-ui_priority = ['bevy/bevy_ui']
-
-# Prioritizes 'egui' over actions when processing inputs.
-egui_priority = ['dep:bevy_egui']
+include = ["/src", "/LICENSE*"]
 
 [[example]]
-name = "ui_priority"
-required-features = [
-  "ui_priority",
-  "egui_priority",
-  "bevy_egui/render",
-  "bevy_egui/default_fonts",
-]
+name = "keybinding_menu"
+required-features = ["serialize"]
+
+[features]
+default = ["reflect", "state"]
+reflect = []
+serialize = ["bevy/serialize", "dep:serde"]
+state = ["bevy/bevy_state"]
+
+[dependencies]
+bevy_enhanced_input_macros = { path = "macros", version = "0.26.0" }
+bevy = { version = "0.19.0", default-features = false, features = [
+  "mouse",
+  "keyboard",
+  "gamepad",
+  "touch",
+] }
+log = "0.4" # Directly depend on `log` like other `no_std` Bevy crates, since `bevy_log` currently requires `std`.
+smallvec = "1.15"
+variadics_please = "2.0"
+serde = { version = "1.0", default-features = false, features = [
+  "derive",
+], optional = true }
+bitflags = { version = "2.6", default-features = false, features = ["serde"] }
+
+[dev-dependencies]
+bevy = { version = "0.19.0", default-features = false, features = [
+  "bevy_gilrs",
+  "bevy_log",
+  "bevy_pbr",
+  "bevy_settings",
+  "bevy_state",
+  "bevy_ui_render",
+  "bevy_window",
+  "default_font",
+  "debug",
+  "reflect_auto_register", # TODO: Remove this once `bevy_support` correctly depends on it
+  "tonemapping_luts",
+  "ui_picking",
+  "x11",
+  "zstd_rust",
+] }
+test-log = "0.2"
 
 [lints.clippy]
 type_complexity = "allow"
+alloc_instead_of_core = "warn"
+std_instead_of_alloc = "warn"
+std_instead_of_core = "warn"
 
 [workspace]
 members = ["macros"]

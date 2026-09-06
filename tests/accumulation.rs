@@ -1,13 +1,27 @@
 use bevy::{input::InputPlugin, prelude::*};
 use bevy_enhanced_input::prelude::*;
+use test_log::test;
 
 #[test]
 fn max_abs() {
     let mut app = App::new();
     app.add_plugins((MinimalPlugins, InputPlugin, EnhancedInputPlugin))
-        .add_input_context::<DummyContext>();
+        .add_input_context::<TestContext>()
+        .finish();
 
-    let entity = app.world_mut().spawn(DummyContext).id();
+    app.world_mut().spawn((
+        TestContext,
+        actions!(
+            TestContext[(
+                Action::<Test>::new(),
+                ActionSettings {
+                    accumulation: Accumulation::MaxAbs,
+                    ..Default::default()
+                },
+                Bindings::spawn(Cardinal::wasd_keys())
+            )]
+        ),
+    ));
 
     app.update();
 
@@ -17,18 +31,31 @@ fn max_abs() {
 
     app.update();
 
-    let instances = app.world().resource::<ContextInstances>();
-    let ctx = instances.context::<DummyContext>(entity);
-    assert_eq!(ctx.action::<MaxAbs>().value(), Vec2::Y.into());
+    let mut actions = app.world_mut().query::<&Action<Test>>();
+    let action = *actions.single(app.world()).unwrap();
+    assert_eq!(*action, Vec2::Y);
 }
 
 #[test]
 fn cumulative() {
     let mut app = App::new();
     app.add_plugins((MinimalPlugins, InputPlugin, EnhancedInputPlugin))
-        .add_input_context::<DummyContext>();
+        .add_input_context::<TestContext>()
+        .finish();
 
-    let entity = app.world_mut().spawn(DummyContext).id();
+    app.world_mut().spawn((
+        TestContext,
+        actions!(
+            TestContext[(
+                Action::<Test>::new(),
+                ActionSettings {
+                    accumulation: Accumulation::Cumulative,
+                    ..Default::default()
+                },
+                Bindings::spawn(Cardinal::wasd_keys())
+            )]
+        ),
+    ));
 
     app.update();
 
@@ -38,33 +65,14 @@ fn cumulative() {
 
     app.update();
 
-    let instances = app.world().resource::<ContextInstances>();
-    let ctx = instances.context::<DummyContext>(entity);
-    assert_eq!(
-        ctx.action::<Cumulative>().value(),
-        Vec2::ZERO.into(),
-        "up and down should cancel each other"
-    );
+    let mut actions = app.world_mut().query::<&Action<Test>>();
+    let action = *actions.single(app.world()).unwrap();
+    assert_eq!(*action, Vec2::ZERO, "up and down should cancel each other");
 }
 
-#[derive(Debug, Component)]
-struct DummyContext;
+#[derive(Component)]
+struct TestContext;
 
-impl InputContext for DummyContext {
-    fn context_instance(_world: &World, _entity: Entity) -> ContextInstance {
-        let mut ctx = ContextInstance::default();
-
-        ctx.bind::<MaxAbs>().to(Cardinal::wasd_keys());
-        ctx.bind::<Cumulative>().to(Cardinal::arrow_keys());
-
-        ctx
-    }
-}
-
-#[derive(Debug, InputAction)]
-#[input_action(output = Vec2, accumulation = MaxAbs)]
-struct MaxAbs;
-
-#[derive(Debug, InputAction)]
-#[input_action(output = Vec2, accumulation = Cumulative)]
-struct Cumulative;
+#[derive(InputAction)]
+#[action_output(Vec2)]
+struct Test;

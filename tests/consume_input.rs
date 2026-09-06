@@ -1,14 +1,37 @@
 use bevy::{input::InputPlugin, prelude::*};
 use bevy_enhanced_input::prelude::*;
+use test_log::test;
 
 #[test]
 fn consume() {
     let mut app = App::new();
     app.add_plugins((MinimalPlugins, InputPlugin, EnhancedInputPlugin))
-        .add_input_context::<ConsumeOnly>();
+        .add_input_context::<TestContext>()
+        .finish();
 
-    let entity1 = app.world_mut().spawn(ConsumeOnly).id();
-    let entity2 = app.world_mut().spawn(ConsumeOnly).id();
+    app.world_mut().spawn((
+        TestContext,
+        actions!(
+            TestContext[
+            (
+                Action::<First>::new(),
+                ActionSettings {
+                    consume_input: true,
+                    ..Default::default()
+                },
+                bindings![KEY],
+            ),
+            (
+                Action::<Second>::new(),
+                ActionSettings {
+                    consume_input: true,
+                    ..Default::default()
+                },
+                bindings![KEY],
+            ),
+            ]
+        ),
+    ));
 
     app.update();
 
@@ -18,16 +41,22 @@ fn consume() {
 
     app.update();
 
-    let instances = app.world().resource::<ContextInstances>();
+    let mut first = app
+        .world_mut()
+        .query_filtered::<&TriggerState, With<Action<First>>>();
 
-    let entity1_ctx = instances.context::<ConsumeOnly>(entity1);
-    assert_eq!(entity1_ctx.action::<Consume>().state(), ActionState::Fired);
+    let first_state = *first.single(app.world()).unwrap();
+    assert_eq!(first_state, TriggerState::Fired);
 
-    let entity2_ctx = instances.context::<ConsumeOnly>(entity2);
+    let mut second = app
+        .world_mut()
+        .query_filtered::<&TriggerState, With<Action<Second>>>();
+
+    let second_state = *second.single(app.world()).unwrap();
     assert_eq!(
-        entity2_ctx.action::<Consume>().state(),
-        ActionState::None,
-        "only first entity with the same mappings that consume inputs should receive them"
+        second_state,
+        TriggerState::None,
+        "action should be consumed"
     );
 }
 
@@ -35,10 +64,32 @@ fn consume() {
 fn passthrough() {
     let mut app = App::new();
     app.add_plugins((MinimalPlugins, InputPlugin, EnhancedInputPlugin))
-        .add_input_context::<PassthroughOnly>();
+        .add_input_context::<TestContext>()
+        .finish();
 
-    let entity1 = app.world_mut().spawn(PassthroughOnly).id();
-    let entity2 = app.world_mut().spawn(PassthroughOnly).id();
+    app.world_mut().spawn((
+        TestContext,
+        actions!(
+            TestContext[
+            (
+                Action::<First>::new(),
+                ActionSettings {
+                    consume_input: false,
+                    ..Default::default()
+                },
+                bindings![KEY],
+            ),
+            (
+                Action::<Second>::new(),
+                ActionSettings {
+                    consume_input: false,
+                    ..Default::default()
+                },
+                bindings![KEY],
+            ),
+            ]
+        ),
+    ));
 
     app.update();
 
@@ -48,18 +99,21 @@ fn passthrough() {
 
     app.update();
 
-    let instances = app.world().resource::<ContextInstances>();
+    let mut first = app
+        .world_mut()
+        .query_filtered::<&TriggerState, With<Action<First>>>();
 
-    let entity1_ctx = instances.context::<PassthroughOnly>(entity1);
-    assert_eq!(
-        entity1_ctx.action::<Passthrough>().state(),
-        ActionState::Fired
-    );
+    let first_state = *first.single(app.world()).unwrap();
+    assert_eq!(first_state, TriggerState::Fired);
 
-    let entity2_ctx = instances.context::<PassthroughOnly>(entity2);
+    let mut second = app
+        .world_mut()
+        .query_filtered::<&TriggerState, With<Action<Second>>>();
+
+    let second_state = *second.single(app.world()).unwrap();
     assert_eq!(
-        entity2_ctx.action::<Passthrough>().state(),
-        ActionState::Fired,
+        second_state,
+        TriggerState::Fired,
         "actions that doesn't consume inputs should still fire"
     );
 }
@@ -68,9 +122,32 @@ fn passthrough() {
 fn consume_then_passthrough() {
     let mut app = App::new();
     app.add_plugins((MinimalPlugins, InputPlugin, EnhancedInputPlugin))
-        .add_input_context::<ConsumeThenPassthrough>();
+        .add_input_context::<TestContext>()
+        .finish();
 
-    let entity = app.world_mut().spawn(ConsumeThenPassthrough).id();
+    app.world_mut().spawn((
+        TestContext,
+        actions!(
+            TestContext[
+            (
+                Action::<First>::new(),
+                ActionSettings {
+                    consume_input: true,
+                    ..Default::default()
+                },
+                bindings![KEY],
+            ),
+            (
+                Action::<Second>::new(),
+                ActionSettings {
+                    consume_input: false,
+                    ..Default::default()
+                },
+                bindings![KEY],
+            ),
+            ]
+        ),
+    ));
 
     app.update();
 
@@ -80,12 +157,21 @@ fn consume_then_passthrough() {
 
     app.update();
 
-    let instances = app.world().resource::<ContextInstances>();
-    let ctx = instances.context::<ConsumeThenPassthrough>(entity);
-    assert_eq!(ctx.action::<Consume>().state(), ActionState::Fired);
+    let mut first = app
+        .world_mut()
+        .query_filtered::<&TriggerState, With<Action<First>>>();
+
+    let first_state = *first.single(app.world()).unwrap();
+    assert_eq!(first_state, TriggerState::Fired);
+
+    let mut second = app
+        .world_mut()
+        .query_filtered::<&TriggerState, With<Action<Second>>>();
+
+    let second_state = *second.single(app.world()).unwrap();
     assert_eq!(
-        ctx.action::<Passthrough>().state(),
-        ActionState::None,
+        second_state,
+        TriggerState::None,
         "action should be consumed"
     );
 }
@@ -94,9 +180,32 @@ fn consume_then_passthrough() {
 fn passthrough_then_consume() {
     let mut app = App::new();
     app.add_plugins((MinimalPlugins, InputPlugin, EnhancedInputPlugin))
-        .add_input_context::<PassthroughThenConsume>();
+        .add_input_context::<TestContext>()
+        .finish();
 
-    let entity = app.world_mut().spawn(PassthroughThenConsume).id();
+    app.world_mut().spawn((
+        TestContext,
+        actions!(
+            TestContext[
+            (
+                Action::<First>::new(),
+                ActionSettings {
+                    consume_input: false,
+                    ..Default::default()
+                },
+                bindings![KEY],
+            ),
+            (
+                Action::<Second>::new(),
+                ActionSettings {
+                    consume_input: true,
+                    ..Default::default()
+                },
+                bindings![KEY],
+            ),
+            ]
+        ),
+    ));
 
     app.update();
 
@@ -106,69 +215,96 @@ fn passthrough_then_consume() {
 
     app.update();
 
-    let instances = app.world().resource::<ContextInstances>();
-    let ctx = instances.context::<PassthroughThenConsume>(entity);
-    assert_eq!(ctx.action::<Consume>().state(), ActionState::Fired);
-    assert_eq!(ctx.action::<Passthrough>().state(), ActionState::Fired);
+    let mut first = app
+        .world_mut()
+        .query_filtered::<&TriggerState, With<Action<First>>>();
+
+    let first_state = *first.single(app.world()).unwrap();
+    assert_eq!(first_state, TriggerState::Fired);
+
+    let mut second = app
+        .world_mut()
+        .query_filtered::<&TriggerState, With<Action<Second>>>();
+
+    let second_state = *second.single(app.world()).unwrap();
+    assert_eq!(second_state, TriggerState::Fired);
 }
 
-#[derive(Debug, Component)]
-struct PassthroughOnly;
+#[test]
+fn modifiers() {
+    let mut app = App::new();
+    app.add_plugins((MinimalPlugins, InputPlugin, EnhancedInputPlugin))
+        .add_input_context::<TestContext>()
+        .finish();
 
-impl InputContext for PassthroughOnly {
-    fn context_instance(_world: &World, _entity: Entity) -> ContextInstance {
-        let mut ctx = ContextInstance::default();
-        ctx.bind::<Passthrough>().to(KEY);
-        ctx
-    }
+    app.world_mut().spawn((
+        TestContext,
+        actions!(TestContext[
+            (
+                Action::<First>::new(),
+                ActionSettings {
+                    consume_input: true,
+                    ..Default::default()
+                },
+                bindings![KEY],
+            ),
+            (
+                Action::<Second>::new(),
+                ActionSettings {
+                    consume_input: true,
+                    ..Default::default()
+                },
+                bindings![Binding::Keyboard { key: KEY, mod_keys: MOD }],
+            )
+        ]),
+    ));
+
+    app.update();
+
+    app.world_mut()
+        .resource_mut::<ButtonInput<KeyCode>>()
+        .press(KEY);
+
+    app.update();
+
+    let mut first = app
+        .world_mut()
+        .query_filtered::<&TriggerState, With<Action<First>>>();
+
+    let first_state = *first.single(app.world()).unwrap();
+    assert_eq!(first_state, TriggerState::Fired);
+
+    let mut second = app
+        .world_mut()
+        .query_filtered::<&TriggerState, With<Action<Second>>>();
+
+    let second_state = *second.single(app.world()).unwrap();
+    assert_eq!(second_state, TriggerState::None);
+
+    app.world_mut()
+        .resource_mut::<ButtonInput<KeyCode>>()
+        .press(KeyCode::ControlLeft);
+
+    app.update();
+
+    let first_state = *first.single(app.world()).unwrap();
+    assert_eq!(first_state, TriggerState::None);
+
+    let second_state = *second.single(app.world()).unwrap();
+    assert_eq!(second_state, TriggerState::Fired);
 }
 
-#[derive(Debug, Component)]
-struct ConsumeOnly;
+#[derive(Component, Clone, Copy)]
+struct TestContext;
 
-impl InputContext for ConsumeOnly {
-    fn context_instance(_world: &World, _entity: Entity) -> ContextInstance {
-        let mut ctx = ContextInstance::default();
-        ctx.bind::<Consume>().to(KEY);
-        ctx
-    }
-}
-
-#[derive(Debug, Component)]
-struct PassthroughThenConsume;
-
-impl InputContext for PassthroughThenConsume {
-    fn context_instance(_world: &World, _entity: Entity) -> ContextInstance {
-        let mut ctx = ContextInstance::default();
-
-        ctx.bind::<Passthrough>().to(KEY);
-        ctx.bind::<Consume>().to(KEY);
-
-        ctx
-    }
-}
-
-#[derive(Debug, Component)]
-struct ConsumeThenPassthrough;
-
-impl InputContext for ConsumeThenPassthrough {
-    fn context_instance(_world: &World, _entity: Entity) -> ContextInstance {
-        let mut ctx = ContextInstance::default();
-
-        ctx.bind::<Consume>().to(KEY);
-        ctx.bind::<Passthrough>().to(KEY);
-
-        ctx
-    }
-}
-
-/// A key used by both [`Consume`] and [`Passthrough`] actions.
+/// Keys used by all actions.
 const KEY: KeyCode = KeyCode::KeyA;
+const MOD: ModKeys = ModKeys::CONTROL;
 
-#[derive(Debug, InputAction)]
-#[input_action(output = bool, consume_input = true)]
-struct Consume;
+#[derive(InputAction)]
+#[action_output(bool)]
+struct First;
 
-#[derive(Debug, InputAction)]
-#[input_action(output = bool, consume_input = false)]
-struct Passthrough;
+#[derive(InputAction)]
+#[action_output(bool)]
+struct Second;

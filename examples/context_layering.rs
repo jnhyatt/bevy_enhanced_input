@@ -1,147 +1,131 @@
-//! One context applied on top of another and overrides some of the mappings.
+//! Demonstrates the concept of context layering in input handling.
+//! One context can be applied on top of another, overriding some of the bindings.
+//!
+//! The [`ContextPriority`] component is used to determine the order of contexts,
+//! with higher priority contexts taking precedence over lower priority ones.
+//! This influences the order in which actions are evaluated and inputs are consumed.
+//! See [`ActionSettings::consume_input`] for more details and control over this behavior.
+//!
+//! In this example, we have a [`Player`] context that allows basic movement and jumping.
+//! When the player enters a vehicle, we add a [`Driving`] context on top of the [`Player`] context.
+//! The [`Driving`] context overrides the jump action with a brake action and adds actions for entering
+//! and exiting the vehicle.
 
-mod player_box;
-
-use std::f32::consts::FRAC_PI_4;
-
-use bevy::{color::palettes::tailwind::INDIGO_600, prelude::*};
+use bevy::prelude::*;
 use bevy_enhanced_input::prelude::*;
-
-use player_box::{PlayerBox, PlayerBoxPlugin, PlayerColor, DEFAULT_SPEED};
 
 fn main() {
     App::new()
-        .add_plugins((
-            DefaultPlugins,
-            EnhancedInputPlugin,
-            PlayerBoxPlugin,
-            GamePlugin,
-        ))
+        .add_plugins((DefaultPlugins, EnhancedInputPlugin))
+        .add_input_context::<Player>()
+        .add_input_context::<Driving>()
+        .add_observer(apply_movement)
+        .add_observer(jump)
+        .add_observer(exit_car)
+        .add_observer(enter_car)
+        .add_observer(brake)
+        .add_systems(Startup, spawn)
         .run();
 }
 
-struct GamePlugin;
-
-impl Plugin for GamePlugin {
-    fn build(&self, app: &mut App) {
-        app.add_input_context::<PlayerBox>()
-            .add_input_context::<Swimming>()
-            .add_systems(Startup, spawn)
-            .add_observer(apply_movement)
-            .add_observer(rotate)
-            .add_observer(exit_water)
-            .add_observer(enter_water)
-            .add_observer(start_diving)
-            .add_observer(end_diving);
-    }
-}
-
 fn spawn(mut commands: Commands) {
-    commands.spawn(Camera2d);
-    commands.spawn(PlayerBox);
-}
-
-fn apply_movement(trigger: Trigger<Fired<Move>>, mut players: Query<&mut Transform>) {
-    let mut transform = players.get_mut(trigger.entity()).unwrap();
-    transform.translation += trigger.value.extend(0.0);
-}
-
-fn rotate(trigger: Trigger<Started<Rotate>>, mut players: Query<&mut Transform>) {
-    let mut transform = players.get_mut(trigger.entity()).unwrap();
-    transform.rotate_z(FRAC_PI_4);
-}
-
-fn enter_water(
-    trigger: Trigger<Started<EnterWater>>,
-    mut commands: Commands,
-    mut players: Query<&mut PlayerColor>,
-) {
-    // Change color for visibility.
-    let mut color = players.get_mut(trigger.entity()).unwrap();
-    **color = INDIGO_600.into();
-
-    commands.entity(trigger.entity()).insert(Swimming);
-}
-
-fn start_diving(trigger: Trigger<Started<Dive>>, mut players: Query<&mut Visibility>) {
-    let mut visibility = players.get_mut(trigger.entity()).unwrap();
-    *visibility = Visibility::Hidden;
-}
-
-fn end_diving(trigger: Trigger<Completed<Dive>>, mut players: Query<&mut Visibility>) {
-    let mut visibility = players.get_mut(trigger.entity()).unwrap();
-    *visibility = Visibility::Visible;
-}
-
-fn exit_water(
-    trigger: Trigger<Started<ExitWater>>,
-    mut commands: Commands,
-    mut players: Query<&mut PlayerColor>,
-) {
-    let mut color = players.get_mut(trigger.entity()).unwrap();
-    **color = Default::default();
-
-    commands.entity(trigger.entity()).remove::<Swimming>();
-}
-
-impl InputContext for PlayerBox {
-    fn context_instance(_world: &World, _entity: Entity) -> ContextInstance {
-        let mut ctx = ContextInstance::default();
-
-        ctx.bind::<Move>()
-            .to(Cardinal::wasd_keys())
-            .with_modifiers((
+    commands.spawn((
+        Player,
+        actions!(Player[
+            (
+                Action::<Movement>::new(),
                 DeadZone::default(),
-                SmoothNudge::default(),
-                Scale::splat(DEFAULT_SPEED),
-            ));
-        ctx.bind::<Rotate>().to(KeyCode::Space);
-        ctx.bind::<EnterWater>().to(KeyCode::Enter);
-
-        ctx
-    }
+                DeltaScale::default(),
+                Scale::splat(10.0),
+                Bindings::spawn((Cardinal::wasd_keys(), Axial::left_stick())),
+            ),
+            (
+                Action::<Jump>::new(),
+                bindings![KeyCode::Space, GamepadButton::South]
+            ),
+            (
+                Action::<EnterCar>::new(),
+                bindings![KeyCode::Enter, GamepadButton::North]
+            ),
+        ]),
+    ));
 }
 
-#[derive(Debug, InputAction)]
-#[input_action(output = Vec2)]
-struct Move;
+fn apply_movement(movement: On<Fire<Movement>>) {
+    info!("moving: {}", movement.value);
+}
 
-#[derive(Debug, InputAction)]
-#[input_action(output = bool)]
-struct Rotate;
+fn jump(_on: On<Start<Jump>>) {
+    info!("jumping");
+}
 
-#[derive(Debug, InputAction)]
-#[input_action(output = bool)]
-struct EnterWater;
+fn enter_car(enter: On<Start<EnterCar>>, mut commands: Commands) {
+    // `Player` has lower priority, so `Brake` and `ExitCar` consume inputs first,
+    // preventing `Rotate` and `EnterCar` from being triggered.
+    // The consuming behavior can be configured using `ActionSettings` component.
+    info!("entering car");
+    commands.entity(enter.context).insert((
+        Driving,
+        ContextPriority::<Driving>::new(1),
+        actions!(Driving[
+            (
+                Action::<Brake>::new(),
+                bindings![KeyCode::Space, GamepadButton::South]
+            ),
+            (
+                Action::<ExitCar>::new(),
+                ActionSettings {
+                    // We set `require_reset` to `true` because `EnterCar` action uses the same input,
+                    // and we want it to be triggerable only after the button is released.
+                    require_reset: true,
+                    // We also set `consume_input` to `true` otherwise, we would immediately re-trigger `EnterCar`.
+                    consume_input: true,
+                    ..Default::default()
+                },
+                bindings![KeyCode::Enter, GamepadButton::North]
+            ),
+        ]),
+    ));
+}
 
-/// Context that overrides some actions from [`PlayerBox`].
+fn brake(_on: On<Fire<Brake>>) {
+    info!("braking");
+}
+
+fn exit_car(exit: On<Start<ExitCar>>, mut commands: Commands) {
+    info!("exiting car");
+    commands
+        .entity(exit.context)
+        .remove_with_requires::<Driving>() // Necessary to fully remove the context.
+        .despawn_related::<Actions<Driving>>();
+}
+
 #[derive(Component)]
-struct Swimming;
+struct Player;
 
-impl InputContext for Swimming {
-    const PRIORITY: isize = 1; // Set higher priority to execute its actions first.
+#[derive(InputAction)]
+#[action_output(Vec2)]
+struct Movement;
 
-    fn context_instance(_world: &World, _entity: Entity) -> ContextInstance {
-        let mut ctx = ContextInstance::default();
+#[derive(InputAction)]
+#[action_output(bool)]
+struct Jump;
 
-        // `PlayerBox` has lower priority, so `Dive` and `ExitWater` consume inputs first,
-        // preventing `Rotate` and `EnterWater` from being triggered.
-        // The consuming behavior can be configured in the `InputAction` trait.
-        ctx.bind::<Dive>().to(KeyCode::Space);
-        ctx.bind::<ExitWater>().to(KeyCode::Enter);
+/// Adds [`Driving`].
+#[derive(InputAction)]
+#[action_output(bool)]
+struct EnterCar;
 
-        ctx
-    }
-}
+/// Overrides some actions from [`Player`].
+#[derive(Component)]
+struct Driving;
 
-#[derive(Debug, InputAction)]
-#[input_action(output = bool)]
-struct Dive;
+/// This action overrides [`Jump`] when the player is [`Driving`].
+#[derive(InputAction)]
+#[action_output(bool)]
+struct Brake;
 
-/// Adds [`Swimming`] context on top of [`PlayerBox`].
-///
-/// We set `require_reset` to `true` because [`EnterWater`] action uses the same input,
-/// and we want it to be triggerable only after the button is released.
-#[derive(Debug, InputAction)]
-#[input_action(output = bool, require_reset = true)]
-struct ExitWater;
+/// Removes [`Driving`].
+#[derive(InputAction)]
+#[action_output(bool)]
+struct ExitCar;

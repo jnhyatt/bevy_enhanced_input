@@ -1,171 +1,225 @@
 //! Demonstrates all available input conditions.
+//!
+//! Input conditions determine when an action is considered "triggered" based on the input state.
+//! Read more about them in the [condition module documentation](bevy_enhanced_input::condition).
+//!
 //! Press keys from the number row on the keyboard to trigger actions and observe the output in console.
 
-use bevy::{log::LogPlugin, prelude::*};
-use bevy_enhanced_input::prelude::*;
+use bevy::{ecs::spawn::SpawnWith, log::LogPlugin, prelude::*};
+use bevy_enhanced_input::prelude::{Press, Release, *};
 
 fn main() {
     // Setup logging to display triggered events.
     let mut log_plugin = LogPlugin::default();
-    log_plugin.filter += ",bevy_enhanced_input::input_context::input_action=trace";
+    log_plugin.filter += ",bevy_enhanced_input=debug";
 
     App::new()
-        .add_plugins((
-            DefaultPlugins.set(log_plugin),
-            EnhancedInputPlugin,
-            GamePlugin,
-        ))
+        .add_plugins((DefaultPlugins.set(log_plugin), EnhancedInputPlugin))
+        .add_input_context::<TestContext>()
+        .add_systems(Startup, spawn)
         .run();
 }
 
-struct GamePlugin;
-
-impl Plugin for GamePlugin {
-    fn build(&self, app: &mut App) {
-        app.add_input_context::<DummyContext>()
-            .add_systems(Startup, spawn);
-    }
-}
-
 fn spawn(mut commands: Commands) {
-    commands.spawn(DummyContext);
+    commands.spawn((
+        TestContext,
+        Actions::<TestContext>::spawn(SpawnWith(|context: &mut ActionSpawner<_>| {
+            context.spawn((
+                Action::<TestDown>::new(),
+                Down::default(),
+                bindings![TestDown::KEY],
+            ));
+            context.spawn((
+                Action::<TestPress>::new(),
+                Press::default(),
+                bindings![TestPress::KEY],
+            ));
+            context.spawn((
+                Action::<TestHold>::new(),
+                Hold::new(1.0),
+                bindings![TestHold::KEY],
+            ));
+            context.spawn((
+                Action::<TestHoldAndRelease>::new(),
+                HoldAndRelease::new(1.0),
+                bindings![TestHoldAndRelease::KEY],
+            ));
+            context.spawn((
+                Action::<TestPulse>::new(),
+                Pulse::new(1.0),
+                bindings![TestPulse::KEY],
+            ));
+            context.spawn((
+                Action::<TestRelease>::new(),
+                Release::default(),
+                bindings![TestRelease::KEY],
+            ));
+            context.spawn((
+                Action::<TestTap>::new(),
+                Tap::new(0.5),
+                bindings![TestTap::KEY],
+            ));
+            context.spawn((
+                Action::<TestToggle>::new(),
+                Toggle::default(),
+                bindings![TestToggle::KEY],
+            ));
+
+            let member1 = context
+                .spawn((Action::<ChordMember1>::new(), bindings![ChordMember1::KEY]))
+                .id();
+            let member2 = context
+                .spawn((Action::<ChordMember2>::new(), bindings![ChordMember2::KEY]))
+                .id();
+
+            context.spawn((Action::<TestChord>::new(), Chord::new([member1, member2])));
+
+            let blocker = context
+                .spawn((Action::<Blocker>::new(), bindings![Blocker::KEY]))
+                .id();
+            context.spawn((
+                Action::<TestBlockBy>::new(),
+                BlockBy::single(blocker),
+                bindings![TestBlockBy::KEY],
+            ));
+
+            context.spawn((
+                Action::<TestCooldown>::new(),
+                Cooldown::new(1.0),
+                bindings![TestCooldown::KEY],
+            ));
+
+            let combo_step = context
+                .spawn((Action::<ComboStep>::new(), bindings![ComboStep::KEY]))
+                .id();
+
+            context.spawn((
+                Action::<TestCombo>::new(),
+                Combo::default().with_step(combo_step).with_step(combo_step),
+            ));
+        })),
+    ));
 }
 
 #[derive(Component)]
-struct DummyContext;
+struct TestContext;
 
-impl InputContext for DummyContext {
-    fn context_instance(_world: &World, _entity: Entity) -> ContextInstance {
-        let mut ctx = ContextInstance::default();
+#[derive(InputAction)]
+#[action_output(bool)]
+struct TestDown;
 
-        ctx.bind::<PressAction>()
-            .to(PressAction::KEY)
-            .with_conditions(Press::default());
-        ctx.bind::<JustPressAction>()
-            .to(JustPressAction::KEY)
-            .with_conditions(JustPress::default());
-        ctx.bind::<HoldAction>()
-            .to(HoldAction::KEY)
-            .with_conditions(Hold::new(1.0));
-        ctx.bind::<HoldAndReleaseAction>()
-            .to(HoldAndReleaseAction::KEY)
-            .with_conditions(HoldAndRelease::new(1.0));
-        ctx.bind::<PulseAction>()
-            .to(PulseAction::KEY)
-            .with_conditions(Pulse::new(1.0));
-        ctx.bind::<ReleaseAction>()
-            .to(ReleaseAction::KEY)
-            .with_conditions(Release::default());
-        ctx.bind::<TapAction>()
-            .to(TapAction::KEY)
-            .with_conditions(Tap::new(0.5));
-        ctx.bind::<ChordMember1>()
-            .to(ChordMember1::KEY)
-            .with_conditions(BlockBy::<ChordAction>::events_only()); // Don't trigger the action when the chord is active.
-        ctx.bind::<ChordMember2>()
-            .to(ChordMember2::KEY)
-            .with_conditions(BlockBy::<ChordAction>::events_only());
-        ctx.bind::<ChordAction>().with_conditions((
-            Chord::<ChordMember1>::default(),
-            Chord::<ChordMember2>::default(),
-        ));
-        ctx.bind::<BlockerAction>().to(BlockerAction::KEY);
-        ctx.bind::<BlockByAction>()
-            .to(BlockByAction::KEY)
-            .with_conditions(BlockBy::<BlockerAction>::default());
-
-        ctx
-    }
-}
-
-#[derive(Debug, InputAction)]
-#[input_action(output = bool)]
-struct PressAction;
-
-impl PressAction {
+impl TestDown {
     const KEY: KeyCode = KeyCode::Digit1;
 }
 
-#[derive(Debug, InputAction)]
-#[input_action(output = bool)]
-struct JustPressAction;
+#[derive(InputAction)]
+#[action_output(bool)]
+struct TestPress;
 
-impl JustPressAction {
+impl TestPress {
     const KEY: KeyCode = KeyCode::Digit2;
 }
 
-#[derive(Debug, InputAction)]
-#[input_action(output = bool)]
-struct HoldAction;
+#[derive(InputAction)]
+#[action_output(bool)]
+struct TestHold;
 
-impl HoldAction {
+impl TestHold {
     const KEY: KeyCode = KeyCode::Digit3;
 }
 
-#[derive(Debug, InputAction)]
-#[input_action(output = bool)]
-struct HoldAndReleaseAction;
+#[derive(InputAction)]
+#[action_output(bool)]
+struct TestHoldAndRelease;
 
-impl HoldAndReleaseAction {
+impl TestHoldAndRelease {
     const KEY: KeyCode = KeyCode::Digit4;
 }
 
-#[derive(Debug, InputAction)]
-#[input_action(output = bool)]
-struct PulseAction;
+#[derive(InputAction)]
+#[action_output(bool)]
+struct TestPulse;
 
-impl PulseAction {
+impl TestPulse {
     const KEY: KeyCode = KeyCode::Digit5;
 }
 
-#[derive(Debug, InputAction)]
-#[input_action(output = bool)]
-struct ReleaseAction;
+#[derive(InputAction)]
+#[action_output(bool)]
+struct TestRelease;
 
-impl ReleaseAction {
+impl TestRelease {
     const KEY: KeyCode = KeyCode::Digit6;
 }
 
-#[derive(Debug, InputAction)]
-#[input_action(output = bool)]
-struct TapAction;
+#[derive(InputAction)]
+#[action_output(bool)]
+struct TestTap;
 
-impl TapAction {
+impl TestTap {
     const KEY: KeyCode = KeyCode::Digit7;
 }
 
-#[derive(Debug, InputAction)]
-#[input_action(output = bool)]
+#[derive(InputAction)]
+#[action_output(bool)]
+struct TestToggle;
+
+impl TestToggle {
+    const KEY: KeyCode = KeyCode::Backspace;
+}
+
+#[derive(InputAction)]
+#[action_output(bool)]
 struct ChordMember1;
 
 impl ChordMember1 {
     const KEY: KeyCode = KeyCode::Digit8;
 }
 
-#[derive(Debug, InputAction)]
-#[input_action(output = bool)]
+#[derive(InputAction)]
+#[action_output(bool)]
 struct ChordMember2;
 
 impl ChordMember2 {
     const KEY: KeyCode = KeyCode::Digit9;
 }
 
-#[derive(Debug, InputAction)]
-#[input_action(output = bool)]
-struct BlockerAction;
+#[derive(InputAction)]
+#[action_output(bool)]
+struct TestChord;
 
-impl BlockerAction {
+#[derive(InputAction)]
+#[action_output(bool)]
+struct Blocker;
+
+impl Blocker {
     const KEY: KeyCode = KeyCode::Digit0;
 }
 
-#[derive(Debug, InputAction)]
-#[input_action(output = bool)]
-struct ChordAction;
+#[derive(InputAction)]
+#[action_output(bool)]
+struct TestBlockBy;
 
-#[derive(Debug, InputAction)]
-#[input_action(output = bool)]
-struct BlockByAction;
-
-impl BlockByAction {
+impl TestBlockBy {
     const KEY: KeyCode = KeyCode::Minus;
 }
+
+#[derive(InputAction)]
+#[action_output(bool)]
+struct TestCooldown;
+
+impl TestCooldown {
+    const KEY: KeyCode = KeyCode::Equal;
+}
+
+#[derive(InputAction)]
+#[action_output(bool)]
+struct ComboStep;
+
+impl ComboStep {
+    const KEY: KeyCode = KeyCode::Space;
+}
+
+#[derive(InputAction)]
+#[action_output(bool)]
+struct TestCombo;

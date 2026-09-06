@@ -20,17 +20,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Clone repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
-      - name: Check typos
-        uses: crate-ci/typos@v1.29.5
+      - name: Check for typos
+        uses: crate-ci/typos@v1.48.0
 
   format:
     name: Format
     runs-on: ubuntu-latest
     steps:
       - name: Clone repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Cache crates
         uses: Swatinem/rust-cache@v2
@@ -38,7 +38,7 @@ jobs:
       - name: Install Taplo
         run: cargo install --locked taplo-cli
 
-      - name: Format
+      - name: Check formatting
         run: |
           cargo fmt --all --check
           taplo fmt --check
@@ -48,7 +48,73 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Clone repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends libudev-dev
+
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cache crates
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Check docs
+        run: cargo rustdoc -- -D warnings
+
+  feature-combinations:
+    name: Feature combinations
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone repo
+        uses: actions/checkout@v7
+
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache crates
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install Cargo Hack
+        run: cargo install cargo-hack
+
+      - name: Check feature combinations
+        run: cargo hack check --feature-powerset
+        env:
+          RUSTFLAGS: -Dwarnings
+
+  no-std-portable-atomic:
+    name: Without atomics and std
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone repo
+        uses: actions/checkout@v7
+
+      # Use the same target platform as Bevy (Game Boy Advance).
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: thumbv6m-none-eabi
+
+      - name: Cache crates
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check compilation
+        run: cargo check --target thumbv6m-none-eabi --features bevy/critical-section
+
+  doctest:
+    name: Doctest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone repo
+        uses: actions/checkout@v7
 
       - name: Install dependencies
         run: |
@@ -61,46 +127,22 @@ jobs:
       - name: Cache crates
         uses: Swatinem/rust-cache@v2
 
-      - name: Clippy
-        run: cargo clippy --all-features --tests --examples -- -D warnings
-
-      - name: Rustdoc
-        run: cargo rustdoc -- -D warnings
-
-  doctest:
-    name: Doctest
-    runs-on: ubuntu-latest
-    steps:
-      - name: Clone repo
-        uses: actions/checkout@v4
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends libudev-dev
-
-      - name: Instal stable toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache crates
-        uses: Swatinem/rust-cache@v2
-
       - name: Test doc
-        run: cargo test --no-default-features --doc
+        run: cargo test --doc
 
   test:
     name: Test
     runs-on: ubuntu-latest
     steps:
       - name: Clone repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends libudev-dev
 
-      - name: Instal stable toolchain
+      - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
 
       - name: Cache crates
@@ -112,12 +154,13 @@ jobs:
       - name: Install Tarpaulin
         run: cargo install cargo-tarpaulin
 
+      # Use less job to prevent OOM while compiling.
       - name: Test
-        run: cargo tarpaulin --no-default-features --engine llvm --out lcov
+        run: cargo tarpaulin --engine llvm --out lcov --jobs 3
 
       - name: Upload code coverage results
         if: github.actor != 'dependabot[bot]'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: code-coverage-report
           path: lcov.info
@@ -125,18 +168,18 @@ jobs:
   codecov:
     name: Upload to Codecov
     if: github.actor != 'dependabot[bot]'
-    needs: [typos, format, lint, doctest, test]
+    needs: [typos, format, lint, no-std-portable-atomic, doctest, test]
     runs-on: ubuntu-latest
     steps:
       - name: Clone repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Download code coverage results
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: code-coverage-report
 
       - name: Upload to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}

@@ -1,13 +1,18 @@
 use bevy::{input::InputPlugin, prelude::*};
 use bevy_enhanced_input::prelude::*;
+use test_log::test;
 
 #[test]
 fn bool() {
     let mut app = App::new();
     app.add_plugins((MinimalPlugins, InputPlugin, EnhancedInputPlugin))
-        .add_input_context::<DummyContext>();
+        .add_input_context::<TestContext>()
+        .finish();
 
-    let entity = app.world_mut().spawn(DummyContext).id();
+    app.world_mut().spawn((
+        TestContext,
+        actions!(TestContext[(Action::<Bool>::new(), bindings![Bool::KEY])]),
+    ));
 
     app.update();
 
@@ -17,9 +22,10 @@ fn bool() {
 
     app.update();
 
-    let instances = app.world().resource::<ContextInstances>();
-    let ctx = instances.context::<DummyContext>(entity);
-    assert_eq!(ctx.action::<Bool>().value(), true.into());
+    let mut actions = app.world_mut().query::<&Action<Bool>>();
+
+    let action = *actions.single(app.world()).unwrap();
+    assert!(*action);
 
     app.world_mut()
         .resource_mut::<ButtonInput<KeyCode>>()
@@ -27,18 +33,21 @@ fn bool() {
 
     app.update();
 
-    let instances = app.world().resource::<ContextInstances>();
-    let ctx = instances.context::<DummyContext>(entity);
-    assert_eq!(ctx.action::<Bool>().value(), false.into());
+    let action = *actions.single(app.world()).unwrap();
+    assert!(!*action);
 }
 
 #[test]
 fn axis1d() {
     let mut app = App::new();
     app.add_plugins((MinimalPlugins, InputPlugin, EnhancedInputPlugin))
-        .add_input_context::<DummyContext>();
+        .add_input_context::<TestContext>()
+        .finish();
 
-    let entity = app.world_mut().spawn(DummyContext).id();
+    app.world_mut().spawn((
+        TestContext,
+        actions!(TestContext[(Action::<Axis1D>::new(), bindings![Axis1D::KEY])]),
+    ));
 
     app.update();
 
@@ -48,9 +57,10 @@ fn axis1d() {
 
     app.update();
 
-    let instances = app.world().resource::<ContextInstances>();
-    let ctx = instances.context::<DummyContext>(entity);
-    assert_eq!(ctx.action::<Axis1D>().value(), 1.0.into());
+    let mut actions = app.world_mut().query::<&Action<Axis1D>>();
+
+    let action = *actions.single(app.world()).unwrap();
+    assert_eq!(*action, 1.0);
 
     app.world_mut()
         .resource_mut::<ButtonInput<KeyCode>>()
@@ -58,18 +68,21 @@ fn axis1d() {
 
     app.update();
 
-    let instances = app.world().resource::<ContextInstances>();
-    let ctx = instances.context::<DummyContext>(entity);
-    assert_eq!(ctx.action::<Axis1D>().value(), 0.0.into());
+    let action = *actions.single(app.world()).unwrap();
+    assert_eq!(*action, 0.0);
 }
 
 #[test]
 fn axis2d() {
     let mut app = App::new();
     app.add_plugins((MinimalPlugins, InputPlugin, EnhancedInputPlugin))
-        .add_input_context::<DummyContext>();
+        .add_input_context::<TestContext>()
+        .finish();
 
-    let entity = app.world_mut().spawn(DummyContext).id();
+    app.world_mut().spawn((
+        TestContext,
+        actions!(TestContext[(Action::<Axis2D>::new(), bindings![Axis2D::KEY])]),
+    ));
 
     app.update();
 
@@ -79,9 +92,10 @@ fn axis2d() {
 
     app.update();
 
-    let instances = app.world().resource::<ContextInstances>();
-    let ctx = instances.context::<DummyContext>(entity);
-    assert_eq!(ctx.action::<Axis2D>().value(), (1.0, 0.0).into());
+    let mut actions = app.world_mut().query::<&Action<Axis2D>>();
+
+    let action = *actions.single(app.world()).unwrap();
+    assert_eq!(*action, (1.0, 0.0).into());
 
     app.world_mut()
         .resource_mut::<ButtonInput<KeyCode>>()
@@ -89,18 +103,21 @@ fn axis2d() {
 
     app.update();
 
-    let instances = app.world().resource::<ContextInstances>();
-    let ctx = instances.context::<DummyContext>(entity);
-    assert_eq!(ctx.action::<Axis2D>().value(), Vec2::ZERO.into());
+    let action = *actions.single(app.world()).unwrap();
+    assert_eq!(*action, Vec2::ZERO);
 }
 
 #[test]
 fn axis3d() {
     let mut app = App::new();
     app.add_plugins((MinimalPlugins, InputPlugin, EnhancedInputPlugin))
-        .add_input_context::<DummyContext>();
+        .add_input_context::<TestContext>()
+        .finish();
 
-    let entity = app.world_mut().spawn(DummyContext).id();
+    app.world_mut().spawn((
+        TestContext,
+        actions!(TestContext[(Action::<Axis3D>::new(), bindings![Axis3D::KEY])]),
+    ));
 
     app.update();
 
@@ -110,9 +127,10 @@ fn axis3d() {
 
     app.update();
 
-    let instances = app.world().resource::<ContextInstances>();
-    let ctx = instances.context::<DummyContext>(entity);
-    assert_eq!(ctx.action::<Axis3D>().value(), (1.0, 0.0, 0.0).into());
+    let mut actions = app.world_mut().query::<&Action<Axis3D>>();
+
+    let action = *actions.single(app.world()).unwrap();
+    assert_eq!(*action, (1.0, 0.0, 0.0).into());
 
     app.world_mut()
         .resource_mut::<ButtonInput<KeyCode>>()
@@ -120,53 +138,39 @@ fn axis3d() {
 
     app.update();
 
-    let instances = app.world().resource::<ContextInstances>();
-    let ctx = instances.context::<DummyContext>(entity);
-    assert_eq!(ctx.action::<Axis3D>().value(), Vec3::ZERO.into());
+    let action = *actions.single(app.world()).unwrap();
+    assert_eq!(*action, Vec3::ZERO);
 }
 
-#[derive(Debug, Component)]
-struct DummyContext;
+#[derive(Component)]
+struct TestContext;
 
-impl InputContext for DummyContext {
-    fn context_instance(_world: &World, _entity: Entity) -> ContextInstance {
-        let mut ctx = ContextInstance::default();
-
-        ctx.bind::<Bool>().to(Bool::KEY);
-        ctx.bind::<Axis1D>().to(Axis1D::KEY);
-        ctx.bind::<Axis2D>().to(Axis2D::KEY);
-        ctx.bind::<Axis3D>().to(Axis3D::KEY);
-
-        ctx
-    }
-}
-
-#[derive(Debug, InputAction)]
-#[input_action(output = bool)]
+#[derive(InputAction)]
+#[action_output(bool)]
 struct Bool;
 
 impl Bool {
     const KEY: KeyCode = KeyCode::KeyA;
 }
 
-#[derive(Debug, InputAction)]
-#[input_action(output = f32)]
+#[derive(InputAction)]
+#[action_output(f32)]
 struct Axis1D;
 
 impl Axis1D {
     const KEY: KeyCode = KeyCode::KeyB;
 }
 
-#[derive(Debug, InputAction)]
-#[input_action(output = Vec2)]
+#[derive(InputAction)]
+#[action_output(Vec2)]
 struct Axis2D;
 
 impl Axis2D {
     const KEY: KeyCode = KeyCode::KeyC;
 }
 
-#[derive(Debug, InputAction)]
-#[input_action(output = Vec3)]
+#[derive(InputAction)]
+#[action_output(Vec3)]
 struct Axis3D;
 
 impl Axis3D {

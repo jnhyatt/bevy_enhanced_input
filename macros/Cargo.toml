@@ -1,11 +1,14 @@
 [package]
 name = "bevy_enhanced_input_macros"
-version = "0.7.0"
-authors = ["Hennadii Chernyshchyk <genaloner@gmail.com>"]
-edition = "2021"
+version = "0.26.0"
+authors = [
+  "Hennadii Chernyshchyk <genaloner@gmail.com>",
+  "Alice Cecile <alice.i.cecile@gmail.com>",
+]
+edition = "2024"
 description = "Bevy Enhanced Input Macros"
 readme = "../README.md"
-repository = "https://github.com/projectharmonia/bevy_enhanced_input"
+repository = "https://github.com/simgine/bevy_enhanced_input"
 keywords = ["bevy", "input", "macros"]
 categories = ["game-development"]
 license = "MIT OR Apache-2.0"
@@ -15,7 +18,6 @@ include = ["/src", "../LICENSE*"]
 proc-macro = true
 
 [dependencies]
-darling = "0.20"
-syn = { version = "2.0", features = ["full"] }
+syn = { version = "3.0", features = ["full"] }
 quote = "1.0"
 proc-macro2 = "1.0"

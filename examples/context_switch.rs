@@ -1,143 +1,132 @@
-//! One context completely replaces another.
+//! Demonstrates the use of context switching in input handling.
+//!
+//! When a context switch action is triggered, the active context changes,
+//! enabling a different set of actions and bindings.
+//! This is done by setting the [`ContextActivity`] component on each context entity,
+//! enabling or disabling them as needed.
+//!
+//! In this example, the player can move and attack in the [`Player`] context.
+//! Pressing the [`OpenInventory`] action switches to the [`Inventory`] context,
+//! where the player can navigate the inventory and close it to return to the [`Player`] context.
 
-mod player_box;
-
-use std::f32::consts::FRAC_PI_4;
-
-use bevy::{color::palettes::tailwind::FUCHSIA_400, prelude::*};
+use bevy::prelude::*;
 use bevy_enhanced_input::prelude::*;
-
-use player_box::{PlayerBox, PlayerBoxPlugin, PlayerColor, DEFAULT_SPEED};
 
 fn main() {
     App::new()
-        .add_plugins((
-            DefaultPlugins,
-            EnhancedInputPlugin,
-            PlayerBoxPlugin,
-            GamePlugin,
-        ))
+        .add_plugins((DefaultPlugins, EnhancedInputPlugin))
+        .add_input_context::<Player>()
+        .add_input_context::<Inventory>()
+        .add_observer(apply_movement)
+        .add_observer(attack)
+        .add_observer(open_inventory)
+        .add_observer(navigate_inventory)
+        .add_observer(close_inventory)
+        .add_systems(Startup, spawn)
         .run();
 }
 
-struct GamePlugin;
-
-impl Plugin for GamePlugin {
-    fn build(&self, app: &mut App) {
-        app.add_input_context::<OnFoot>()
-            .add_input_context::<InCar>()
-            .add_systems(Startup, spawn)
-            .add_observer(apply_movement)
-            .add_observer(rotate)
-            .add_observer(enter_car)
-            .add_observer(exit_car);
-    }
-}
-
 fn spawn(mut commands: Commands) {
-    commands.spawn(Camera2d);
-    commands.spawn((PlayerBox, OnFoot));
+    commands.spawn(player_bundle());
 }
 
-fn apply_movement(trigger: Trigger<Fired<Move>>, mut players: Query<&mut Transform>) {
-    let mut transform = players.get_mut(trigger.entity()).unwrap();
-    transform.translation += trigger.value.extend(0.0);
+fn apply_movement(movement: On<Fire<Movement>>) {
+    info!("moving: {}", movement.value);
 }
 
-fn rotate(trigger: Trigger<Started<Rotate>>, mut players: Query<&mut Transform>) {
-    let mut transform = players.get_mut(trigger.entity()).unwrap();
-    transform.rotate_z(FRAC_PI_4);
+fn attack(_on: On<Fire<Attack>>) {
+    info!("attacking");
 }
 
-fn enter_car(
-    trigger: Trigger<Started<EnterCar>>,
-    mut commands: Commands,
-    mut players: Query<&mut PlayerColor>,
-) {
-    // Change color for visibility.
-    let mut color = players.get_mut(trigger.entity()).unwrap();
-    **color = FUCHSIA_400.into();
-
-    commands
-        .entity(trigger.entity())
-        .remove::<OnFoot>()
-        .insert(InCar);
+fn open_inventory(open: On<Start<OpenInventory>>, mut commands: Commands) {
+    info!("opening inventory");
+    commands.entity(open.context).insert((
+        ContextActivity::<Player>::INACTIVE,
+        ContextActivity::<Inventory>::ACTIVE,
+    ));
 }
 
-fn exit_car(
-    trigger: Trigger<Started<ExitCar>>,
-    mut commands: Commands,
-    mut players: Query<&mut PlayerColor>,
-) {
-    let mut color = players.get_mut(trigger.entity()).unwrap();
-    **color = Default::default();
+fn navigate_inventory(_on: On<Fire<NavigateInventory>>) {
+    info!("navigating inventory");
+}
 
-    commands
-        .entity(trigger.entity())
-        .remove::<InCar>()
-        .insert(OnFoot);
+fn close_inventory(close: On<Start<CloseInventory>>, mut commands: Commands) {
+    info!("closing inventory");
+    commands.entity(close.context).insert((
+        ContextActivity::<Player>::ACTIVE,
+        ContextActivity::<Inventory>::INACTIVE,
+    ));
+}
+
+fn player_bundle() -> impl Bundle {
+    (
+        Player,
+        actions!(Player[
+            (
+                Action::<Movement>::new(),
+                DeadZone::default(),
+                DeltaScale::default(),
+                Scale::splat(10.0),
+                Bindings::spawn((Cardinal::wasd_keys(), Axial::left_stick())),
+            ),
+            (
+                Action::<Attack>::new(),
+                bindings![MouseButton::Left, GamepadButton::West],
+            ),
+            (
+                Action::<OpenInventory>::new(),
+                // We set `require_reset` to `true` because `CloseInventory` action uses the same input,
+                // and we want it to be triggerable only after the button is released.
+                ActionSettings {
+                    require_reset: true,
+                    ..Default::default()
+                },
+                bindings![KeyCode::KeyI, GamepadButton::Select],
+            ),
+        ]),
+        Inventory,
+        actions!(Inventory[
+            (
+                Action::<NavigateInventory>::new(),
+                Bindings::spawn((Cardinal::wasd_keys(), Axial::left_stick())),
+                Pulse::new(0.2), // Avoid triggering every frame on hold for UI.
+            ),
+            (
+                Action::<CloseInventory>::new(),
+                ActionSettings {
+                    require_reset: true,
+                    ..Default::default()
+                },
+                bindings![KeyCode::KeyI, GamepadButton::Select],
+            )
+        ]),
+    )
 }
 
 #[derive(Component)]
-struct OnFoot;
+struct Player;
 
-impl InputContext for OnFoot {
-    fn context_instance(_world: &World, _entity: Entity) -> ContextInstance {
-        let mut ctx = ContextInstance::default();
+#[derive(InputAction)]
+#[action_output(Vec2)]
+struct Movement;
 
-        ctx.bind::<Move>()
-            .to(Cardinal::wasd_keys())
-            .with_modifiers((
-                DeadZone::default(),
-                SmoothNudge::default(),
-                Scale::splat(DEFAULT_SPEED),
-            ));
-        ctx.bind::<Rotate>().to(KeyCode::Space);
-        ctx.bind::<EnterCar>().to(KeyCode::Enter);
+#[derive(InputAction)]
+#[action_output(bool)]
+struct Attack;
 
-        ctx
-    }
-}
-
-#[derive(Debug, InputAction)]
-#[input_action(output = Vec2)]
-struct Move;
-
-#[derive(Debug, InputAction)]
-#[input_action(output = bool)]
-struct Rotate;
-
-/// Switches context to [`InCar`].
-///
-/// We set `require_reset` to `true` because [`ExitCar`] action uses the same input,
-/// and we want it to be triggerable only after the button is released.
-#[derive(Debug, InputAction)]
-#[input_action(output = bool, require_reset = true)]
-struct EnterCar;
+/// Switches context to [`Inventory`].
+#[derive(InputAction)]
+#[action_output(bool)]
+struct OpenInventory;
 
 #[derive(Component)]
-struct InCar;
+struct Inventory;
 
-impl InputContext for InCar {
-    fn context_instance(_world: &World, _entity: Entity) -> ContextInstance {
-        let mut ctx = ContextInstance::default();
+#[derive(InputAction)]
+#[action_output(Vec2)]
+struct NavigateInventory;
 
-        ctx.bind::<Move>()
-            .to(Cardinal::wasd_keys())
-            .with_modifiers((
-                DeadZone::default(),
-                SmoothNudge::default(),
-                Scale::splat(DEFAULT_SPEED + 20.0), // Make car faster.
-            ));
-        ctx.bind::<ExitCar>().to(KeyCode::Enter);
-
-        ctx
-    }
-}
-
-/// Switches context to [`OnFoot`].
-///
-/// See [`EnterCar`] for details about `require_reset`.
-#[derive(Debug, InputAction)]
-#[input_action(output = bool, require_reset = true)]
-struct ExitCar;
+/// Switches context to [`Player`].
+#[derive(InputAction)]
+#[action_output(bool)]
+struct CloseInventory;
